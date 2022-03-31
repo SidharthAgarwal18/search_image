@@ -1,30 +1,40 @@
-#include <fstream>
+#include <stdio.h>
 #include <iostream>
-#include <string>
-#include <cstdio>
-#include <bits/stdc++.h>
-#include <vector>
-#include <stdlib.h>
-#include <utility>
+#include <fstream>
 
 using namespace std;
-
-__global__ void AverageFinder(int* dM, int* dA, int d_rows, int d_cols, int q_rows, int q_cols){
-	int avg = 100;
-	printf("Thread: %d%d\n", threadIdx.x, threadIdx.y);
-	for(int i=threadIdx.x; i<threadIdx.x + q_rows; i++){
-		for(int j=threadIdx.y; i<threadIdx.y + q_cols; j++){
-			avg += (dM[i*q_cols*3 + j*3] + dM[i*q_cols*3 + j*3 + 1] + dM[i*q_cols*3 + j*3 + 2]);
+__global__ 
+void AverageFinder(int* dM, int *dQ, int d_rows, int d_cols, int q_rows, int q_cols, int qavg, int th1)
+{
+	int avg = 0;
+	int i = blockIdx.x * blockDim.x + threadIdx.x;
+	// printf("threadidx:%d\n",i);
+	for(int r = 0; r<q_rows; r++){
+		for(int c = 0; c<q_cols; c++){
+			avg += (dM[i*3 + r*d_cols*3 + c*3] + dM[i*3 + r*d_cols*3 + c*3 + 1] + dM[i*3 + r*d_cols*3 + c*3 + 2])/3;
 		}
 	}
-	printf("sum = %d\n", avg);
-	// avg /= q_rows * q_cols;
-	printf("avg = %d\n", avg);
-	dA[threadIdx.x * (d_rows - q_rows + 1) + threadIdx.y] = avg;
+
+	avg /= (q_rows * q_cols);
+	//printf("avg : %d\n",avg);
+	if(abs(qavg - avg) <= th1){
+		double total = 0;
+		for(int r = 0; r<q_rows; r++){
+			for(int c = 0; c<q_cols; c++){
+				for(int k = 0; k<3; k++){
+					long v = dM[i*3 + r*d_cols*3 + c*3 + k] - dQ[r*q_cols*3 + c*3 + k];
+					total += v * v;
+				}
+			}
+		}
+		total /= (q_cols*q_rows*3);
+		total = sqrt(total);
+		printf("%d is close, RMSD : %f\n",i,total);
+	}
+
 }
 
 int main(int argc, char* argv[]){
-
 	if(argc < 5){
 		cout<<"insufficient args provided\n";
 		return -1;
@@ -70,33 +80,30 @@ int main(int argc, char* argv[]){
 	int *dM, *dQ;
 	cudaMalloc(&dM, d_rows*d_cols * 3 * sizeof(int));
 	cudaMalloc(&dQ, q_rows*q_cols * 3 * sizeof(int));
-	cudaMemcpy(dM, input_img, d_rows * d_cols * 3 * sizeof(int), cudaMemcpyDefault);
-	cudaMemcpy(dQ, query_img, q_rows * q_cols * 3 * sizeof(int), cudaMemcpyDefault);
+	cudaMemcpy(dM, input_img, d_rows * d_cols * 3 * sizeof(int), cudaMemcpyHostToDevice);
+	cudaMemcpy(dQ, query_img, q_rows * q_cols * 3 * sizeof(int), cudaMemcpyHostToDevice);
 
-	//storing average distances
-	int *dA;				
-	cudaMalloc(&dA, (d_rows - q_rows + 1) * (d_cols - q_cols + 1) * sizeof(int));
+	//get query imae avg
+	int qavg = 0;
+	for(int i=0; i<q_rows * q_cols * 3; i+=3){
+		qavg += (query_img[i] + query_img[i+1] + query_img[i+2])/3;
+	}
+	qavg /= (q_cols * q_rows);
+	// cout<<"qavg :"<<qavg<<'\n';
+
+	int th1 = 1;
 
 	//kernel invocation
-	dim3 dimBlock((d_rows - q_rows + 1) , (d_cols - q_cols + 1));
-	AverageFinder<<<1, dimBlock>>>(dM, dA, d_rows, d_cols, q_rows, q_cols);
+	int N = (d_rows - q_rows + 1) * (d_cols - q_cols + 1);
+	AverageFinder<<<(N + 255)/256,256>>>(dM, dQ, d_rows, d_cols, q_rows, q_cols, qavg, th1);
 
 
 	cudaDeviceSynchronize();
 	//getback from the kernel
-	int *A = new int[(d_rows - q_rows + 1) * (d_cols - q_cols + 1)];
 	int *Topn = new int[topn * 3];
-	cudaMemcpy(A, dA, (d_rows - q_rows + 1) * (d_cols - q_cols + 1) * sizeof(int), cudaMemcpyDefault);
+
 	cudaFree(dM);
 	cudaFree(dQ);
-	cudaFree(dA);
-
-	//debug
-	for(int i=0;i< (d_rows - q_rows + 1) * (d_cols - q_cols + 1); i++){
-		cout<<A[i]<<" ";
-	}
-	cout<<"\nDone printing A\n";
-	
 	//calculate topntriplets
 
 	ofstream output_file("output.txt", ios::out);
