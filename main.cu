@@ -1,36 +1,111 @@
 #include <stdio.h>
 #include <iostream>
 #include <fstream>
+#include <map>
+#include <bits/stdc++.h>
+#include <math.h>
 
 using namespace std;
 __global__ 
-void AverageFinder(int* dM, int *dQ, int d_rows, int d_cols, int q_rows, int q_cols, int qavg, int th1)
+void AverageFinder(int* dM, int *dQ, double *dR, int d_rows, int d_cols, int q_rows, int q_cols, int qavg, int th1, int angle)
 {
 	int avg = 0;
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
-	// printf("threadidx:%d\n",i);
-	for(int r = 0; r<q_rows; r++){
-		for(int c = 0; c<q_cols; c++){
-			avg += (dM[i*3 + r*d_cols*3 + c*3] + dM[i*3 + r*d_cols*3 + c*3 + 1] + dM[i*3 + r*d_cols*3 + c*3 + 2])/3;
-		}
+	double x = i / d_cols;
+	double y = i % d_cols;
+	double leftmost, rightmost, topmost, bottommost;
+	double sqrt2 = sqrt(2.0f);
+	if (angle == 1){
+		leftmost = x - (q_rows / sqrt2);
+		rightmost = x + (q_cols / sqrt2);
+		topmost = y + (q_cols / sqrt2) + (q_rows / sqrt2);
+		bottommost = y;
 	}
 
-	avg /= (q_rows * q_cols);
-	//printf("avg : %d\n",avg);
-	if(abs(qavg - avg) <= th1){
-		double total = 0;
-		for(int r = 0; r<q_rows; r++){
-			for(int c = 0; c<q_cols; c++){
-				for(int k = 0; k<3; k++){
-					long v = dM[i*3 + r*d_cols*3 + c*3 + k] - dQ[r*q_cols*3 + c*3 + k];
-					total += v * v;
-				}
-			}
-		}
-		total /= (q_cols*q_rows*3);
-		total = sqrt(total);
-		printf("%d is close, RMSD : %f\n",i,total);
+	else if(angle == 0){
+		leftmost = x;
+		rightmost = x + q_cols;
+		topmost = y + q_rows;
+		bottommost = y;
 	}
+
+	else if(angle == -1){
+		rightmost = x + (q_cols / sqrt2) + (q_rows / sqrt2);
+		leftmost = x;
+		topmost = y + (q_rows / sqrt2);
+		bottommost = y - (q_cols / sqrt2);
+	}
+	 
+	printf("topmost:%f, bottommost:%f, leftmost:%f, rightmost:%f\n", topmost, bottommost, leftmost, rightmost);
+	if(topmost >= d_rows || bottommost < 0 || leftmost < 0 || rightmost >= d_cols){
+		dR[i] = -1.0f;
+		return;
+	}
+
+
+	// printf("threadidx:%d\n",i);
+	//add check to remove all for(int r = 0; r<q_rows; r++){
+	// 	for(int c = 0; c<q_cols; c++){
+	// 		int point = i + r*d_cols + c;
+	// 		int pavg = 0;
+	// 		for(int k = 0; k<3; k++){
+	// 			pavg += dM[point * 3 + k];
+	// 		}
+	// 		avg += pavg / 3;
+	// 	}
+	// }
+
+	// avg /= (q_rows * q_cols);
+	// //printf("avg : %d\n",avg);
+	// if(abs(qavg - avg) <= th1){
+	// 	double total = 0;
+	// 	for(int r = 0; r<q_rows; r++){
+	// 		for(int c = 0; c<q_cols; c++){
+	// 			for(int k = 0; k<3; k++){
+	// 				long v = dM[i*3 + r*d_cols*3 + c*3 + k] - dQ[r*q_cols*3 + c*3 + k];
+	// 				total += v * v;
+	// 			}
+	// 		}
+	// 	}
+	// 	total /= (q_cols*q_rows*3);
+	// 	total = sqrt(total);
+	// 	dR[i] = total;
+	// 	printf("%d is close, RMSD : %f\n",i,total);
+	// }
+	// else{
+	// 	dR[i] = -1.0f;
+	// }overlaps that are outside data_image for all angles
+	// for(int r = 0; r<q_rows; r++){
+	// 	for(int c = 0; c<q_cols; c++){
+	// 		int point = i + r*d_cols + c;
+	// 		int pavg = 0;
+	// 		for(int k = 0; k<3; k++){
+	// 			pavg += dM[point * 3 + k];
+	// 		}
+	// 		avg += pavg / 3;
+	// 	}
+	// }
+
+	// avg /= (q_rows * q_cols);
+	// //printf("avg : %d\n",avg);
+	// if(abs(qavg - avg) <= th1){
+	// 	double total = 0;
+	// 	for(int r = 0; r<q_rows; r++){
+	// 		for(int c = 0; c<q_cols; c++){
+	// 			for(int k = 0; k<3; k++){
+	// 				long v = dM[i*3 + r*d_cols*3 + c*3 + k] - dQ[r*q_cols*3 + c*3 + k];
+	// 				total += v * v;
+	// 			}
+	// 		}
+	// 	}
+	// 	total /= (q_cols*q_rows*3);
+	// 	total = sqrt(total);
+	// 	dR[i] = total;
+	// 	printf("%d is close, RMSD : %f\n",i,total);
+	// }
+	// else{
+	// 	dR[i] = -1.0f;
+	// }
 
 }
 
@@ -84,6 +159,8 @@ int main(int argc, char* argv[]){
 	cudaMemcpy(dQ, query_img, q_rows * q_cols * 3 * sizeof(int), cudaMemcpyHostToDevice);
 
 	//get query imae avg
+	// int N = (d_rows - q_rows + 1) * (d_cols - q_cols + 1);
+	int N = d_rows * d_cols;
 	int qavg = 0;
 	for(int i=0; i<q_rows * q_cols * 3; i+=3){
 		qavg += (query_img[i] + query_img[i+1] + query_img[i+2])/3;
@@ -92,24 +169,43 @@ int main(int argc, char* argv[]){
 	// cout<<"qavg :"<<qavg<<'\n';
 
 	int th1 = 1;
+	
+	double *dR;
+	cudaMalloc(&dR, N * sizeof(double));
 
 	//kernel invocation
-	int N = (d_rows - q_rows + 1) * (d_cols - q_cols + 1);
-	AverageFinder<<<(N + 255)/256,256>>>(dM, dQ, d_rows, d_cols, q_rows, q_cols, qavg, th1);
-
-
+	AverageFinder<<<(N + 255)/256,256>>>(dM, dQ, dR, d_rows, d_cols, q_rows, q_cols, qavg, th1, 0);
+	cudaDeviceSynchronize();
+	AverageFinder<<<(N + 255)/256,256>>>(dM, dQ, dR, d_rows, d_cols, q_rows, q_cols, qavg, th1, 1);
+	cudaDeviceSynchronize();
+	AverageFinder<<<(N + 255)/256,256>>>(dM, dQ, dR, d_rows, d_cols, q_rows, q_cols, qavg, th1, -1);
 	cudaDeviceSynchronize();
 	//getback from the kernel
-	int *Topn = new int[topn * 3];
+	map<int, double> Topn;
+	double *R = new double[N];
+	cudaMemcpy(R, dR, N * sizeof(double), cudaMemcpyDeviceToHost);
 
+	cudaFree(dR);
 	cudaFree(dM);
 	cudaFree(dQ);
+
 	//calculate topntriplets
+	// for(int i=0; i<N; i++){
+	// 	if(Topn.size() < topn){
+	// 		Topn.emplace_back(R[i], i);
+	// 		sort(Topn.begin(), Topn.end());
+	// 	}
+	// 	else{
+	// 		if(Topn[topn-1].first > R[i]){
+	// 			Topn.emplace_back(R[i], i);
+	// 			sort(Topn.begin(), Topn.end());
+	// 			Topn.pop_back();
+	// 		}
+	// 	}
+	// }
+
 
 	ofstream output_file("output.txt", ios::out);
-	for(int i=0;i<topn * 3;i+=3){
-		output_file<<Topn[i]<<" "<<Topn[i+1]<<" "<<Topn[i+2]<<"\n";
-	}
 	output_file.close();
 	return 0;
 }
