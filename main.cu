@@ -4,12 +4,23 @@
 #include <map>
 #include <bits/stdc++.h>
 #include <math.h>
+#include <queue>
+#include <vector>
+
+#define PI 3.141592 
 
 using namespace std;
+
+__device__
+double distbtw(double a, double b, double c, double d)
+{
+	double x = (a-c) * (a-c);
+	double y = (b-d) * (b-d);
+	return sqrt(x + y);
+}
 __global__ 
 void AverageFinder(int* dM, int *dQ, double *dR, int d_rows, int d_cols, int q_rows, int q_cols, int qavg, int th1, int angle)
 {
-	int avg = 0;
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
 	double x = i / d_cols;
 	double y = i % d_cols;
@@ -36,89 +47,99 @@ void AverageFinder(int* dM, int *dQ, double *dR, int d_rows, int d_cols, int q_r
 		bottommost = y - (q_cols / sqrt2);
 	}
 	 
-	printf("topmost:%f, bottommost:%f, leftmost:%f, rightmost:%f\n", topmost, bottommost, leftmost, rightmost);
-	if(topmost >= d_rows || bottommost < 0 || leftmost < 0 || rightmost >= d_cols){
+	// printf("topmost:%f, bottommost:%f, leftmost:%f, rightmost:%f\n", topmost, bottommost, leftmost, rightmost);
+	if(topmost > d_rows || bottommost < 0 || leftmost < 0 || rightmost > d_cols){
 		dR[i] = -1.0f;
 		return;
 	}
 
-
+	int avg = 0;
+	for(int r = bottommost; r < topmost; r++){
+		for(int c = leftmost; c < rightmost; c++){
+			int pavg = 0;
+			int point = r * d_cols + c;
+			for(int k = 0; k < 3; k++){
+				pavg += dM[point * 3 + k];
+			}
+			avg += pavg/3;
+		}
+	}
+	avg /= ((topmost - bottommost) * (rightmost - leftmost));
 	// printf("threadidx:%d\n",i);
-	//add check to remove all for(int r = 0; r<q_rows; r++){
-	// 	for(int c = 0; c<q_cols; c++){
-	// 		int point = i + r*d_cols + c;
-	// 		int pavg = 0;
-	// 		for(int k = 0; k<3; k++){
-	// 			pavg += dM[point * 3 + k];
-	// 		}
-	// 		avg += pavg / 3;
-	// 	}
-	// }
+	// printf("avg : %d\n",avg);
+	if(abs(qavg - avg) <= th1){
+		double total = 0;
+		for(int r = 0; r<q_rows; r++){
+			for(int c = 0; c<q_cols; c++){
+				double baseang;
+				if(angle == 1)
+					baseang = 45 * PI / 180;
+				else if(angle == -1)
+					baseang = -45 * PI / 180;
+				else if(angle == 0)
+					baseang = 0;
+				double d = distbtw(r + x, c + y, x, y);
+				double ang = baseang + atan2((double)r, (double)c);
+				double rx = x + cos(ang) * d;
+				double ry = y + sin(ang) * d;
+				double ceilrx = ceil(rx), floorrx = floor(rx), ceilry = ceil(ry), floorry = floor(ry);
+				double colorR, colorG, colorB;
+				if(((ceilrx - rx) > 1e-10 && (rx - floorrx) > 1e-10)|| ((ry - floorry) > 1e-10 && (ceilry - ry) > 1e-10)){
+					//bilinear interpolation
+					// printf("%d doing bilinear interpolation, baseang%f ang%f ceilrx:%f floorrx:%f rx:%f ceilry:%f floorry:%f ry:%f\n", i, baseang, ang, ceilrx, floorrx, rx, ceilry, floorry, ry);
+					colorR = dM[(int)(floorry * d_cols + floorrx)*3]*(ceilrx - rx)*(ceilry - ry) + dM[(int)(floorry * d_cols + ceilrx)*3]*(rx - floorrx)*(ceilry - ry) + dM[(int)(ceilry * d_cols + floorrx)*3]*(ceilrx - rx)*(ry - floorry) + dM[(int)(ceilry * d_cols + ceilrx)*3]*(rx - floorrx)*(ry - floorry);
+					colorG = dM[(int)(1 + (floorry * d_cols + floorrx)*3)]*(ceilrx - rx)*(ceilry - ry) + dM[(int)(1 + (floorry * d_cols + ceilrx)*3)]*(rx - floorrx)*(ceilry - ry) + dM[(int)(1 + (ceilry * d_cols + floorrx)*3)]*(ceilrx - rx)*(ry - floorry) + dM[(int)(1 + (ceilry * d_cols + ceilrx)*3)]*(rx - floorrx)*(ry - floorry);
+					colorB = dM[(int)(2 + (floorry * d_cols + floorrx)*3)]*(ceilrx - rx)*(ceilry - ry) + dM[(int)(2 + (floorry * d_cols + ceilrx)*3)]*(rx - floorrx)*(ceilry - ry) + dM[(int)(2 + (ceilry * d_cols + floorrx)*3)]*(ceilrx - rx)*(ry - floorry) + dM[(int)(2 + (ceilry * d_cols + ceilrx)*3)]*(rx - floorrx)*(ry - floorry);
 
-	// avg /= (q_rows * q_cols);
-	// //printf("avg : %d\n",avg);
-	// if(abs(qavg - avg) <= th1){
-	// 	double total = 0;
-	// 	for(int r = 0; r<q_rows; r++){
-	// 		for(int c = 0; c<q_cols; c++){
-	// 			for(int k = 0; k<3; k++){
-	// 				long v = dM[i*3 + r*d_cols*3 + c*3 + k] - dQ[r*q_cols*3 + c*3 + k];
-	// 				total += v * v;
-	// 			}
-	// 		}
-	// 	}
-	// 	total /= (q_cols*q_rows*3);
-	// 	total = sqrt(total);
-	// 	dR[i] = total;
-	// 	printf("%d is close, RMSD : %f\n",i,total);
-	// }
-	// else{
-	// 	dR[i] = -1.0f;
-	// }overlaps that are outside data_image for all angles
-	// for(int r = 0; r<q_rows; r++){
-	// 	for(int c = 0; c<q_cols; c++){
-	// 		int point = i + r*d_cols + c;
-	// 		int pavg = 0;
-	// 		for(int k = 0; k<3; k++){
-	// 			pavg += dM[point * 3 + k];
-	// 		}
-	// 		avg += pavg / 3;
-	// 	}
-	// }
+				}
+				else{
+					// printf("%d doing normal interpolation, baseang%f ang%f ceilrx:%f floorrx:%f rx:%f ceilry:%f floorry:%f ry:%f\n", i, baseang, ang, ceilrx, floorrx, rx, ceilry, floorry, ry);
+					colorR = dM[(int)(ry * d_cols + rx)*3];
+					colorG = dM[(int)(1 + (ry * d_cols + rx)*3)];
+					colorB = dM[(int)(2 + (ry * d_cols + rx)*3)];
+				}
+				double diffR = colorR - dQ[(r * q_cols + c)*3];
+				double diffG = colorG - dQ[1 + (r * q_cols + c)*3];
+				double diffB = colorB - dQ[2 + (r * q_cols + c)*3];
+				total += (diffR*diffR + diffG*diffG + diffB*diffB);
+			}
+		}
+		total /= (q_cols*q_rows*3);
+		total = sqrt(total);
+		dR[i] = total;
+		// printf("%d is close, RMSD : %f\n",i,total);
+	}
+	else{
+		dR[i] = -1.0f;
+	}
+}
 
-	// avg /= (q_rows * q_cols);
-	// //printf("avg : %d\n",avg);
-	// if(abs(qavg - avg) <= th1){
-	// 	double total = 0;
-	// 	for(int r = 0; r<q_rows; r++){
-	// 		for(int c = 0; c<q_cols; c++){
-	// 			for(int k = 0; k<3; k++){
-	// 				long v = dM[i*3 + r*d_cols*3 + c*3 + k] - dQ[r*q_cols*3 + c*3 + k];
-	// 				total += v * v;
-	// 			}
-	// 		}
-	// 	}
-	// 	total /= (q_cols*q_rows*3);
-	// 	total = sqrt(total);
-	// 	dR[i] = total;
-	// 	printf("%d is close, RMSD : %f\n",i,total);
-	// }
-	// else{
-	// 	dR[i] = -1.0f;
-	// }
-
+void calcTopn(priority_queue<pair<double, vector<int> > > &Topn, double *dR, int N, int topn, int angle){
+	for(int i=0;i<N;i++){
+		if(Topn.size() > topn){
+			pair<double, vector<int> > topele = Topn.top();
+			if(topele.first > dR[i]){
+				Topn.pop();
+				Topn.emplace(dR[i], {i, angle});
+			}
+		}
+		else{
+			Topn.emplace(dR[i], {i, angle});
+		}
+	}
 }
 
 int main(int argc, char* argv[]){
-	if(argc < 5){
+	if(argc < 6){
 		cout<<"insufficient args provided\n";
 		return -1;
 	}
 
 	ifstream image_file(argv[1], ios::in);
 	ifstream query_file(argv[2], ios::in);
-	int threshold = atoi(argv[3]);
-	int topn = atoi(argv[4]);
+	int threshold1 = atoi(argv[3]);
+	int threshold2 = atoi(argv[4]);
+	int topn = atoi(argv[5]);
 
 	int d_rows,d_cols;
 	image_file>>d_rows;
@@ -126,7 +147,7 @@ int main(int argc, char* argv[]){
 
 	int *input_img = new int[d_rows * d_cols * 3];
 
-	for(int idx=0; idx<d_rows; idx++){
+	for(int idx=d_rows-1; idx>=0; idx--){
 		for(int jdx=0; jdx<d_cols; jdx++){
 			for(int kdx=0; kdx<3; kdx++){
 				image_file>>input_img[idx*d_cols*3 + jdx*3 + kdx];
@@ -141,7 +162,7 @@ int main(int argc, char* argv[]){
 
 	int *query_img = new int[q_rows * q_cols * 3];
 	
-	for(int idx=0;idx<q_rows;idx++){
+	for(int idx=q_rows-1;idx>=0;idx--){
 		for(int jdx=0;jdx<q_cols;jdx++){
 			for(int kdx=0;kdx<3;kdx++){
 				query_file>>query_img[idx*q_cols*3 + jdx*3 + kdx];
@@ -168,7 +189,7 @@ int main(int argc, char* argv[]){
 	qavg /= (q_cols * q_rows);
 	// cout<<"qavg :"<<qavg<<'\n';
 
-	int th1 = 1;
+	int th1 = threshold1;
 	
 	double *dR;
 	cudaMalloc(&dR, N * sizeof(double));
@@ -180,7 +201,7 @@ int main(int argc, char* argv[]){
 	cudaDeviceSynchronize();
 	AverageFinder<<<(N + 255)/256,256>>>(dM, dQ, dR, d_rows, d_cols, q_rows, q_cols, qavg, th1, -1);
 	cudaDeviceSynchronize();
-	//getback from the kernel
+	// getback from the kernel
 	map<int, double> Topn;
 	double *R = new double[N];
 	cudaMemcpy(R, dR, N * sizeof(double), cudaMemcpyDeviceToHost);
@@ -188,22 +209,6 @@ int main(int argc, char* argv[]){
 	cudaFree(dR);
 	cudaFree(dM);
 	cudaFree(dQ);
-
-	//calculate topntriplets
-	// for(int i=0; i<N; i++){
-	// 	if(Topn.size() < topn){
-	// 		Topn.emplace_back(R[i], i);
-	// 		sort(Topn.begin(), Topn.end());
-	// 	}
-	// 	else{
-	// 		if(Topn[topn-1].first > R[i]){
-	// 			Topn.emplace_back(R[i], i);
-	// 			sort(Topn.begin(), Topn.end());
-	// 			Topn.pop_back();
-	// 		}
-	// 	}
-	// }
-
 
 	ofstream output_file("output.txt", ios::out);
 	output_file.close();
