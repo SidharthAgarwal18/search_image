@@ -6,6 +6,7 @@
 #include <math.h>
 #include <queue>
 #include <vector>
+#include<string>
 
 #define PI 3.141592 
 
@@ -114,17 +115,23 @@ void AverageFinder(int* dM, int *dQ, double *dR, int d_rows, int d_cols, int q_r
 	}
 }
 
-void calcTopn(priority_queue<pair<double, vector<int> > > &Topn, double *dR, int N, int topn, int angle){
+void calcTopn(priority_queue<pair<double, vector<int> > > &Topn, double *dR, int N, int topn, int angle,int thresh){
 	for(int i=0;i<N;i++){
-		if(Topn.size() > topn){
+		if(Topn.size() > topn && dR[i]>=0 && dR[i]<=thresh){
 			pair<double, vector<int> > topele = Topn.top();
 			if(topele.first > dR[i]){
 				Topn.pop();
-				Topn.emplace(dR[i], {i, angle});
+				vector<int> temp;
+				temp.push_back(i);
+				temp.push_back(angle);
+				Topn.push(make_pair(dR[i], temp));
 			}
 		}
-		else{
-			Topn.emplace(dR[i], {i, angle});
+		else if(dR[i]>=0 && dR[i]<=thresh){
+			vector<int> temp;
+			temp.push_back(i);
+			temp.push_back(angle);
+			Topn.push(make_pair(dR[i], temp));
 		}
 	}
 }
@@ -137,8 +144,8 @@ int main(int argc, char* argv[]){
 
 	ifstream image_file(argv[1], ios::in);
 	ifstream query_file(argv[2], ios::in);
-	int threshold1 = atoi(argv[3]);
-	int threshold2 = atoi(argv[4]);
+	int threshold1 = atoi(argv[4]);
+	int threshold2 = atoi(argv[3]);
 	int topn = atoi(argv[5]);
 
 	int d_rows,d_cols;
@@ -190,27 +197,57 @@ int main(int argc, char* argv[]){
 	// cout<<"qavg :"<<qavg<<'\n';
 
 	int th1 = threshold1;
+
+	priority_queue<pair<double, vector<int> > > Topn;
 	
 	double *dR;
+	double *R = new double[N];
 	cudaMalloc(&dR, N * sizeof(double));
 
 	//kernel invocation
 	AverageFinder<<<(N + 255)/256,256>>>(dM, dQ, dR, d_rows, d_cols, q_rows, q_cols, qavg, th1, 0);
 	cudaDeviceSynchronize();
+	cudaMemcpy(R, dR, N * sizeof(double), cudaMemcpyDeviceToHost);
+	calcTopn(Topn,R,N,topn,0,threshold2);
+
 	AverageFinder<<<(N + 255)/256,256>>>(dM, dQ, dR, d_rows, d_cols, q_rows, q_cols, qavg, th1, 1);
 	cudaDeviceSynchronize();
+	cudaMemcpy(R, dR, N * sizeof(double), cudaMemcpyDeviceToHost);
+	calcTopn(Topn,R,N,topn,1,threshold2);
+
 	AverageFinder<<<(N + 255)/256,256>>>(dM, dQ, dR, d_rows, d_cols, q_rows, q_cols, qavg, th1, -1);
 	cudaDeviceSynchronize();
-	// getback from the kernel
-	map<int, double> Topn;
-	double *R = new double[N];
-	cudaMemcpy(R, dR, N * sizeof(double), cudaMemcpyDeviceToHost);
+	cudaMemcpy(R, dR, N * sizeof(double), cudaMemcpyDeviceToHost);			// Sidharth: optimize this
+	calcTopn(Topn,R,N,topn,-1,threshold2);
 
 	cudaFree(dR);
 	cudaFree(dM);
 	cudaFree(dQ);
 
+	
+	vector<vector<int> > ans;
+	while(Topn.size()>0)
+	{
+		ans.push_back(Topn.top().second);
+		cerr<<Topn.top().first<<"\n";
+		Topn.pop();
+	}
+
 	ofstream output_file("output.txt", ios::out);
+
+	for(int idx=ans.size()-1;idx>=0;idx--)
+	{
+		output_file << ans[idx][0]/d_rows;
+		output_file << " ";
+		output_file << ans[idx][0]%d_cols;
+		output_file << " ";
+
+		if(int(ans[idx][1])==1) output_file << "45";
+		else if(int(ans[idx][1])==-1) output_file << "-45";
+		else output_file << "0";
+
+		output_file << "\n";
+	}
 	output_file.close();
 	return 0;
 }
