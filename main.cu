@@ -28,35 +28,35 @@ void AverageFinder(int* dM, int *dQ, double *dR, int d_rows, int d_cols, int q_r
 	double leftmost, rightmost, topmost, bottommost;
 	double sqrt2 = sqrt(2.0f);
 	if (angle == 1){
-		leftmost = x - (q_rows / sqrt2);
-		rightmost = x + (q_cols / sqrt2);
-		topmost = y + (q_cols / sqrt2) + (q_rows / sqrt2);
+		leftmost = x - ((q_rows - 1)  / sqrt2);
+		rightmost = x + ((q_cols - 1) / sqrt2);
+		topmost = y + ((q_cols - 1) / sqrt2) + ((q_rows - 1) / sqrt2);
 		bottommost = y;
 	}
 
 	else if(angle == 0){
 		leftmost = x;
-		rightmost = x + q_cols;
-		topmost = y + q_rows;
+		rightmost = x + q_cols - 1;
+		topmost = y + q_rows - 1;
 		bottommost = y;
 	}
 
 	else if(angle == -1){
-		rightmost = x + (q_cols / sqrt2) + (q_rows / sqrt2);
+		rightmost = x + ((q_cols - 1) / sqrt2) + ((q_rows - 1)/ sqrt2);
 		leftmost = x;
-		topmost = y + (q_rows / sqrt2);
-		bottommost = y - (q_cols / sqrt2);
+		topmost = y + ((q_rows - 1) / sqrt2);
+		bottommost = y - ((q_cols - 1) / sqrt2);
 	}
 	 
 	// printf("topmost:%f, bottommost:%f, leftmost:%f, rightmost:%f\n", topmost, bottommost, leftmost, rightmost);
-	if(topmost > d_rows || bottommost < 0 || leftmost < 0 || rightmost > d_cols){
+	if(topmost >= d_rows || bottommost < 0 || leftmost < 0 || rightmost >= d_cols){
 		dR[i] = -1.0f;
 		return;
 	}
 
 	int avg = 0;
-	for(int r = bottommost; r < topmost; r++){
-		for(int c = leftmost; c < rightmost; c++){
+	for(int r = bottommost; r <= topmost; r++){
+		for(int c = leftmost; c <= rightmost; c++){
 			int pavg = 0;
 			int point = r * d_cols + c;
 			for(int k = 0; k < 3; k++){
@@ -65,9 +65,8 @@ void AverageFinder(int* dM, int *dQ, double *dR, int d_rows, int d_cols, int q_r
 			avg += pavg/3;
 		}
 	}
-	avg /= ((topmost - bottommost) * (rightmost - leftmost));
-	// printf("threadidx:%d\n",i);
-	// printf("avg : %d\n",avg);
+	avg /= ((topmost - bottommost + 1) * (rightmost - leftmost + 1));
+	// printf("threadidx:%d avg:%d\n",i, avg);
 	if(abs(qavg - avg) <= th1){
 		double total = 0;
 		for(int r = 0; r<q_rows; r++){
@@ -87,7 +86,7 @@ void AverageFinder(int* dM, int *dQ, double *dR, int d_rows, int d_cols, int q_r
 				double colorR, colorG, colorB;
 				if(((ceilrx - rx) > 1e-10 && (rx - floorrx) > 1e-10)|| ((ry - floorry) > 1e-10 && (ceilry - ry) > 1e-10)){
 					//bilinear interpolation
-					// printf("%d doing bilinear interpolation, baseang%f ang%f ceilrx:%f floorrx:%f rx:%f ceilry:%f floorry:%f ry:%f\n", i, baseang, ang, ceilrx, floorrx, rx, ceilry, floorry, ry);
+					// printf("%d doing bilinear interpolation, baseang%f ang%f d:%f ceilrx:%f floorrx:%f rx:%f ceilry:%f floorry:%f ry:%f\n", i, baseang, ang, d, ceilrx, floorrx, rx, ceilry, floorry, ry);
 					colorR = dM[(int)(floorry * d_cols + floorrx)*3]*(ceilrx - rx)*(ceilry - ry) + dM[(int)(floorry * d_cols + ceilrx)*3]*(rx - floorrx)*(ceilry - ry) + dM[(int)(ceilry * d_cols + floorrx)*3]*(ceilrx - rx)*(ry - floorry) + dM[(int)(ceilry * d_cols + ceilrx)*3]*(rx - floorrx)*(ry - floorry);
 					colorG = dM[(int)(1 + (floorry * d_cols + floorrx)*3)]*(ceilrx - rx)*(ceilry - ry) + dM[(int)(1 + (floorry * d_cols + ceilrx)*3)]*(rx - floorrx)*(ceilry - ry) + dM[(int)(1 + (ceilry * d_cols + floorrx)*3)]*(ceilrx - rx)*(ry - floorry) + dM[(int)(1 + (ceilry * d_cols + ceilrx)*3)]*(rx - floorrx)*(ry - floorry);
 					colorB = dM[(int)(2 + (floorry * d_cols + floorrx)*3)]*(ceilrx - rx)*(ceilry - ry) + dM[(int)(2 + (floorry * d_cols + ceilrx)*3)]*(rx - floorrx)*(ceilry - ry) + dM[(int)(2 + (ceilry * d_cols + floorrx)*3)]*(ceilrx - rx)*(ry - floorry) + dM[(int)(2 + (ceilry * d_cols + ceilrx)*3)]*(rx - floorrx)*(ry - floorry);
@@ -108,9 +107,10 @@ void AverageFinder(int* dM, int *dQ, double *dR, int d_rows, int d_cols, int q_r
 		total /= (q_cols*q_rows*3);
 		total = sqrt(total);
 		dR[i] = total;
-		// printf("%d is close, RMSD : %f\n",i,total);
+		printf("%d (%f,%f) with avg:%d is close, RMSD:%f\n",i,x,y,avg,total);
 	}
 	else{
+		// printf("%d (%f,%f) with avg:%d is not close\n",i,x,y,avg);
 		dR[i] = -1.0f;
 	}
 }
@@ -118,6 +118,7 @@ void AverageFinder(int* dM, int *dQ, double *dR, int d_rows, int d_cols, int q_r
 void calcTopn(priority_queue<pair<double, vector<int> > > &Topn, double *dR, int N, int topn, int angle,int thresh){
 	for(int i=0;i<N;i++){
 		if(Topn.size() > topn && dR[i]>=0 && dR[i]<=thresh){
+			cout<<"got:"<<i<<" "<<dR[i]<<" "<<angle<<"\n";
 			pair<double, vector<int> > topele = Topn.top();
 			if(topele.first > dR[i]){
 				Topn.pop();
@@ -128,6 +129,7 @@ void calcTopn(priority_queue<pair<double, vector<int> > > &Topn, double *dR, int
 			}
 		}
 		else if(dR[i]>=0 && dR[i]<=thresh){
+			cout<<"got:"<<i<<" "<<dR[i]<<" "<<angle<<"\n";
 			vector<int> temp;
 			temp.push_back(i);
 			temp.push_back(angle);
@@ -144,8 +146,8 @@ int main(int argc, char* argv[]){
 
 	ifstream image_file(argv[1], ios::in);
 	ifstream query_file(argv[2], ios::in);
-	int threshold1 = atoi(argv[4]);
-	int threshold2 = atoi(argv[3]);
+	int threshold1 = atoi(argv[3]);
+	int threshold2 = atoi(argv[4]);
 	int topn = atoi(argv[5]);
 
 	int d_rows,d_cols;
@@ -154,7 +156,7 @@ int main(int argc, char* argv[]){
 
 	int *input_img = new int[d_rows * d_cols * 3];
 
-	for(int idx=d_rows-1; idx>=0; idx--){
+	for(int idx=0; idx<d_rows; idx++){
 		for(int jdx=0; jdx<d_cols; jdx++){
 			for(int kdx=0; kdx<3; kdx++){
 				image_file>>input_img[idx*d_cols*3 + jdx*3 + kdx];
@@ -169,7 +171,7 @@ int main(int argc, char* argv[]){
 
 	int *query_img = new int[q_rows * q_cols * 3];
 	
-	for(int idx=q_rows-1;idx>=0;idx--){
+	for(int idx=0;idx<q_rows;idx++){
 		for(int jdx=0;jdx<q_cols;jdx++){
 			for(int kdx=0;kdx<3;kdx++){
 				query_file>>query_img[idx*q_cols*3 + jdx*3 + kdx];
@@ -190,13 +192,14 @@ int main(int argc, char* argv[]){
 	// int N = (d_rows - q_rows + 1) * (d_cols - q_cols + 1);
 	int N = d_rows * d_cols;
 	int qavg = 0;
+	int th1 = threshold1;
 	for(int i=0; i<q_rows * q_cols * 3; i+=3){
 		qavg += (query_img[i] + query_img[i+1] + query_img[i+2])/3;
 	}
 	qavg /= (q_cols * q_rows);
-	// cout<<"qavg :"<<qavg<<'\n';
+	cout<<"qavg :"<<qavg<<'\n';
+	cout<<"threshold1:"<<th1<<" threshold2:"<<threshold2<<" topn:"<<topn<<"\n";
 
-	int th1 = threshold1;
 
 	priority_queue<pair<double, vector<int> > > Topn;
 	
