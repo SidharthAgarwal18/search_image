@@ -23,8 +23,8 @@ __global__
 void AverageFinder(int* dM, int *dQ, double *dR, int d_rows, int d_cols, int q_rows, int q_cols, int qavg, int th1, int angle)
 {
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
-	double x = i / d_cols;
-	double y = i % d_cols;
+	double y = i / d_cols;
+	double x = i % d_cols;
 	double leftmost, rightmost, topmost, bottommost;
 	double sqrt2 = sqrt(2.0f);
 	if (angle == 1){
