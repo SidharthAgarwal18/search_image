@@ -107,7 +107,7 @@ void AverageFinder(int* dM, int *dQ, double *dR, int d_rows, int d_cols, int q_r
 		total /= (q_cols*q_rows*3);
 		total = sqrt(total);
 		dR[i] = total;
-		printf("%d (%f,%f) with avg:%d is close, RMSD:%f\n",i,x,y,avg,total);
+		//printf("%d (%f,%f) with avg:%d is close, RMSD:%f\n",i,x,y,avg,total);
 	}
 	else{
 		// printf("%d (%f,%f) with avg:%d is not close\n",i,x,y,avg);
@@ -117,8 +117,8 @@ void AverageFinder(int* dM, int *dQ, double *dR, int d_rows, int d_cols, int q_r
 
 void calcTopn(priority_queue<pair<double, vector<int> > > &Topn, double *dR, int N, int topn, int angle,int thresh){
 	for(int i=0;i<N;i++){
-		if(Topn.size() > topn && dR[i]>=0 && dR[i]<=thresh){
-			cout<<"got:"<<i<<" "<<dR[i]<<" "<<angle<<"\n";
+		if(Topn.size() >= topn && dR[i]>=0 && dR[i]<=thresh){
+			//cout<<"got:"<<i<<" "<<dR[i]<<" "<<angle<<"\n";
 			pair<double, vector<int> > topele = Topn.top();
 			if(topele.first > dR[i]){
 				Topn.pop();
@@ -129,7 +129,7 @@ void calcTopn(priority_queue<pair<double, vector<int> > > &Topn, double *dR, int
 			}
 		}
 		else if(dR[i]>=0 && dR[i]<=thresh){
-			cout<<"got:"<<i<<" "<<dR[i]<<" "<<angle<<"\n";
+			//cout<<"got:"<<i<<" "<<dR[i]<<" "<<angle<<"\n";
 			vector<int> temp;
 			temp.push_back(i);
 			temp.push_back(angle);
@@ -154,6 +154,8 @@ int main(int argc, char* argv[]){
 	image_file>>d_rows;
 	image_file>>d_cols;
 
+	//cerr<<"break1\n";
+
 	int *input_img = new int[d_rows * d_cols * 3];
 
 	for(int idx=0; idx<d_rows; idx++){
@@ -169,6 +171,7 @@ int main(int argc, char* argv[]){
 	query_file>>q_rows;
 	query_file>>q_cols;
 
+	//cerr<<"break2\n";
 	int *query_img = new int[q_rows * q_cols * 3];
 	
 	for(int idx=0;idx<q_rows;idx++){
@@ -197,8 +200,8 @@ int main(int argc, char* argv[]){
 		qavg += (query_img[i] + query_img[i+1] + query_img[i+2])/3;
 	}
 	qavg /= (q_cols * q_rows);
-	cout<<"qavg :"<<qavg<<'\n';
-	cout<<"threshold1:"<<th1<<" threshold2:"<<threshold2<<" topn:"<<topn<<"\n";
+	//cout<<"qavg :"<<qavg<<'\n';
+	//cout<<"threshold1:"<<th1<<" threshold2:"<<threshold2<<" topn:"<<topn<<"\n";
 
 
 	priority_queue<pair<double, vector<int> > > Topn;
@@ -232,7 +235,7 @@ int main(int argc, char* argv[]){
 	while(Topn.size()>0)
 	{
 		ans.push_back(Topn.top().second);
-		cerr<<Topn.top().first<<"\n";
+		//cerr<<Topn.top().first<<"\n";
 		Topn.pop();
 	}
 
