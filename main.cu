@@ -158,7 +158,7 @@ int main(int argc, char* argv[]){
 
 	int *input_img = new int[d_rows * d_cols * 3];
 
-	for(int idx=0; idx<d_rows; idx++){
+	for(int idx=d_rows-1; idx>=0; idx--){
 		for(int jdx=0; jdx<d_cols; jdx++){
 			for(int kdx=0; kdx<3; kdx++){
 				image_file>>input_img[idx*d_cols*3 + jdx*3 + kdx];
@@ -174,7 +174,7 @@ int main(int argc, char* argv[]){
 	//cerr<<"break2\n";
 	int *query_img = new int[q_rows * q_cols * 3];
 	
-	for(int idx=0;idx<q_rows;idx++){
+	for(int idx=q_rows-1;idx>=0;idx--){
 		for(int jdx=0;jdx<q_cols;jdx++){
 			for(int kdx=0;kdx<3;kdx++){
 				query_file>>query_img[idx*q_cols*3 + jdx*3 + kdx];
@@ -243,7 +243,7 @@ int main(int argc, char* argv[]){
 
 	for(int idx=ans.size()-1;idx>=0;idx--)
 	{
-		output_file << ans[idx][0]/d_rows;
+		output_file << ans[idx][0]/d_cols;
 		output_file << " ";
 		output_file << ans[idx][0]%d_cols;
 		output_file << " ";
