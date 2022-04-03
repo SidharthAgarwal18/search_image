@@ -146,8 +146,8 @@ int main(int argc, char* argv[]){
 
 	ifstream image_file(argv[1], ios::in);
 	ifstream query_file(argv[2], ios::in);
-	int threshold1 = atoi(argv[3]);
-	int threshold2 = atoi(argv[4]);
+	int threshold1 = atoi(argv[4]); 		// for summation filtering..
+	int threshold2 = atoi(argv[3]);			// for rdmsa
 	int topn = atoi(argv[5]);
 
 	int d_rows,d_cols;
