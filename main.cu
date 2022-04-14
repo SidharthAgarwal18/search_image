@@ -20,7 +20,7 @@ double distbtw(double a, double b, double c, double d)
 	return sqrt(x + y);
 }
 __global__ 
-void AverageFinder(int* dM, int *dQ, double *dR, int d_rows, int d_cols, int q_rows, int q_cols, int qavg, int th1, int angle)
+void AverageFinder(int* dM, int *dQ, double *dR, int d_rows, int d_cols, int q_rows, int q_cols, float qavg, float th1, int angle)
 {
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
 	double y = i / d_cols;
@@ -54,20 +54,22 @@ void AverageFinder(int* dM, int *dQ, double *dR, int d_rows, int d_cols, int q_r
 		return;
 	}
 
-	int avg = 0;
-	for(int r = bottommost; r <= topmost; r++){
-		for(int c = leftmost; c <= rightmost; c++){
-			int pavg = 0;
+	float avg = 0;
+	int values = 0;
+	for(int r = ceil(bottommost); r <= floor(topmost); r++){
+		for(int c = ceil(leftmost); c <= floor(rightmost); c++){
+			float pavg = 0;
 			int point = r * d_cols + c;
 			for(int k = 0; k < 3; k++){
 				pavg += dM[point * 3 + k];
 			}
+			values ++;
 			avg += pavg/3;
 		}
 	}
-	avg /= ((topmost - bottommost + 1) * (rightmost - leftmost + 1));
+	avg /= (float)(values);
 	// printf("threadidx:%d avg:%d\n",i, avg);
-	if(abs(qavg - avg) <= th1){
+	if((float)abs(qavg - avg) <= th1){
 		double total = 0;
 		for(int r = 0; r<q_rows; r++){
 			for(int c = 0; c<q_cols; c++){
@@ -107,15 +109,13 @@ void AverageFinder(int* dM, int *dQ, double *dR, int d_rows, int d_cols, int q_r
 		total /= (q_cols*q_rows*3);
 		total = sqrt(total);
 		dR[i] = total;
-		//printf("%d (%f,%f) with avg:%d is close, RMSD:%f\n",i,x,y,avg,total);
 	}
 	else{
-		// printf("%d (%f,%f) with avg:%d is not close\n",i,x,y,avg);
 		dR[i] = -1.0f;
 	}
 }
 
-void calcTopn(priority_queue<pair<double, vector<int> > > &Topn, double *dR, int N, int topn, int angle,int thresh){
+void calcTopn(priority_queue<pair<double, vector<int> > > &Topn, double *dR, int N, int topn, int angle,float thresh){
 	for(int i=0;i<N;i++){
 		if(Topn.size() >= topn && dR[i]>=0 && dR[i]<=thresh){
 			//cout<<"got:"<<i<<" "<<dR[i]<<" "<<angle<<"\n";
@@ -146,8 +146,8 @@ int main(int argc, char* argv[]){
 
 	ifstream image_file(argv[1], ios::in);
 	ifstream query_file(argv[2], ios::in);
-	int threshold1 = atoi(argv[4]); 		// for summation filtering..
-	int threshold2 = atoi(argv[3]);			// for rdmsa
+	float threshold1 = atof(argv[4]); 		// for summation filtering..
+	float threshold2 = atof(argv[3]);			// for rdmsa
 	int topn = atoi(argv[5]);
 
 	int d_rows,d_cols;
@@ -194,15 +194,12 @@ int main(int argc, char* argv[]){
 	//get query imae avg
 	// int N = (d_rows - q_rows + 1) * (d_cols - q_cols + 1);
 	int N = d_rows * d_cols;
-	int qavg = 0;
-	int th1 = threshold1;
+	float qavg = 0;
+	float th1 = threshold1;
 	for(int i=0; i<q_rows * q_cols * 3; i+=3){
-		qavg += (query_img[i] + query_img[i+1] + query_img[i+2])/3;
+		qavg += ((float)(query_img[i] + query_img[i+1] + query_img[i+2]))/3;
 	}
 	qavg /= (q_cols * q_rows);
-	//cout<<"qavg :"<<qavg<<'\n';
-	//cout<<"threshold1:"<<th1<<" threshold2:"<<threshold2<<" topn:"<<topn<<"\n";
-
 
 	priority_queue<pair<double, vector<int> > > Topn;
 	
@@ -235,7 +232,6 @@ int main(int argc, char* argv[]){
 	while(Topn.size()>0)
 	{
 		ans.push_back(Topn.top().second);
-		//cerr<<Topn.top().first<<"\n";
 		Topn.pop();
 	}
 
