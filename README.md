@@ -1,5 +1,5 @@
 # search_image
-Template search in Image using CUDA
+Template search in Image using CUDA.  
 For complete problem statement see `Assignment_4.pdf`.  
 
 ## Libraries
